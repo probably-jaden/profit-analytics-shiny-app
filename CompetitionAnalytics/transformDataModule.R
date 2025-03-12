@@ -4,6 +4,7 @@ library(DT)
 library(dplyr)
 library(rlang)
 library(tidyr)
+library(purrr)
 
 
 ###########
@@ -66,11 +67,38 @@ transformDataUI <- function(id) {
     conditionalPanel(
       condition = sprintf("input['%s'] == 'Non-Durable' && input['%s'] == 'WTP'", 
                           ns("primary_transformation"), ns("secondary_transformation")),
-      pickerInput(ns("wtpCol_nondurable"), "Select WTP Column", choices = NULL,
-                  options = list(`live-search` = TRUE))
+      fluidRow(
+        column(6,
+               pickerInput(ns("col_P_max_A"), "Select Maximum WTP for Product A", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_A_max_0"), "Select Q_A at Pa=max, Pb=0", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_A_0_0"), "Select Baseline Q_A (Pa=0, Pb=0)", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_A_0_max"), "Select Q_A at Pa=0, Pb=max", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_A_max_max"), "Select Q_A at Pa=max, Pb=max", choices = NULL,
+                           options = list(`live-search` = TRUE))
+        ),
+        column(6,
+               pickerInput(ns("col_P_max_B"), "Select Maximum WTP for Product B", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_B_max_0"), "Select Q_B at Pb=max, Pa=0", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_B_0_0"), "Select Baseline Q_B (Pa=0, Pb=0)", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_B_0_max"), "Select Q_B at Pb=0, Pa=max", choices = NULL,
+                           options = list(`live-search` = TRUE)),
+               pickerInput(ns("col_Q_B_max_max"), "Select Q_B at Pa=max, Pb=max", choices = NULL,
+                           options = list(`live-search` = TRUE))
+        )
+      )
     ),
+
+
     actionButton(ns("transform_btn"), "Transform Data"),
     hr(),
+    
     uiOutput(ns("transform_result")),
     verbatimTextOutput(ns("transform_summary_stats"))
   )
@@ -100,12 +128,17 @@ transformDataServer <- function(id, data) {
     })
     
     # Update picker inputs with column names from the uploaded data.
+    # updates for nondurable prices happens inside the dynamic mapping
     observeEvent(data(), {
       req(data())
       cols <- names(data())
-      updatePickerInput(session, "wtpCol_firm1", choices = cols, selected = "")
-      updatePickerInput(session, "wtpCol_firm2", choices = cols, selected = "")
-      updatePickerInput(session, "wtpCol_nondurable", choices = cols, selected = "")
+      # List all picker input IDs that need to be updated.
+      picker_ids <- c("wtpCol_firm1", "wtpCol_firm2", 
+                      "col_P_max_A", "col_Q_A_max_0", "col_Q_A_0_0", "col_Q_A_0_max", "col_Q_A_max_max",
+                      "col_P_max_B", "col_Q_B_max_0", "col_Q_B_0_0", "col_Q_B_0_max", "col_Q_B_max_max")
+      for (id in picker_ids) {
+        updatePickerInput(session, id, choices = cols, selected = "")
+      }
     })
     
     # --- Custom Mapping UI for Non-Durable (Prices) ---
@@ -140,88 +173,112 @@ transformDataServer <- function(id, data) {
 # Non-durable WTP transformation function ---------------------------------
 
     transformNonDurableWTP <- function(data, selected_cols) {
-      # selected_cols should be a vector of 6 column names:
-      # For Product A: [P_max_A, Q_max_A, Q0_A]
-      # For Product B: [P_max_B, Q_max_B, Q0_B]
+      # selected_cols should be a vector of 10 column names:
+      # For Product A: [P_max_A, Q_A_max_0, Q_A_0_0, Q_A_0_max, Q_A_max_max]
+      # For Product B: [P_max_B, Q_B_max_0, Q_B_0_0, Q_B_0_max, Q_B_max_max]
+      req(selected_cols, length(selected_cols) == 10)
       
-      if (length(selected_cols) != 6) {
-        stop("Please select exactly 6 columns for Non-Durable (WTP) transformation.")
+      if (length(selected_cols) != 10) {
+        stop("Please select exactly 10 columns for Non-Durable (WTP) data transformation.")
       }
       
       df <- data %>%
         rename(
-          P_max_A = !!sym(selected_cols[1]),
-          Q_max_A = !!sym(selected_cols[2]),
-          Q0_A    = !!sym(selected_cols[3]),
-          P_max_B = !!sym(selected_cols[4]),
-          Q_max_B = !!sym(selected_cols[5]),
-          Q0_B    = !!sym(selected_cols[6])
+          P_max_A     = !!sym(selected_cols[1]),
+          Q_A_max_0   = !!sym(selected_cols[2]),
+          Q_A_0_0     = !!sym(selected_cols[3]),
+          Q_A_0_max   = !!sym(selected_cols[4]),
+          Q_A_max_max = !!sym(selected_cols[5]),
+          P_max_B     = !!sym(selected_cols[6]),
+          Q_B_max_0   = !!sym(selected_cols[7]),
+          Q_B_0_0     = !!sym(selected_cols[8]),
+          Q_B_0_max   = !!sym(selected_cols[9]),
+          Q_B_max_max = !!sym(selected_cols[10])
         ) %>%
-        mutate(across(c(P_max_A, Q_max_A, Q0_A, P_max_B, Q_max_B, Q0_B), as.numeric)) %>%
-        filter(!is.na(P_max_A) & !is.na(Q_max_A) & !is.na(Q0_A) &
-                 !is.na(P_max_B) & !is.na(Q_max_B) & !is.na(Q0_B) &
-                 P_max_A > 0 & P_max_B > 0) %>%
+        mutate(across(c(P_max_A, Q_A_max_0, Q_A_0_0, Q_A_0_max, Q_A_max_max,
+                        P_max_B, Q_B_max_0, Q_B_0_0, Q_B_0_max, Q_B_max_max), as.numeric)) %>%
+        filter(!is.na(P_max_A) & !is.na(Q_A_max_0) & !is.na(Q_A_0_0) &
+                 !is.na(Q_A_0_max) & !is.na(Q_A_max_max) &
+                 !is.na(P_max_B) & !is.na(Q_B_max_0) & !is.na(Q_B_0_0) &
+                 !is.na(Q_B_0_max) & !is.na(Q_B_max_max) &
+                 P_max_A > 0 & P_max_B > 0)
+
+      print(paste("Rows after filtering:", nrow(df)))
+      nSample <- nrow(df)
+      
+      # Compute slopes and cross-price effects for Product A:
+      df <- df %>%
         mutate(
-          slope_A = (Q_max_A - Q0_A) / P_max_A,
-          slope_B = (Q_max_B - Q0_B) / P_max_B,
-          intercept_A = Q0_A,
-          intercept_B = Q0_B
+          slope_A1 = (Q_A_max_0 - Q_A_0_0) / P_max_A,
+          slope_A2 = (Q_A_max_max - Q_A_0_max) / P_max_A,
+          slope_A  = (slope_A1 + slope_A2) / 2,
+          cross_A1 = (Q_A_0_max - Q_A_0_0) / P_max_B,
+          cross_A2 = (Q_A_max_max - Q_A_max_0) / P_max_B,
+          gamma_A  = (cross_A1 + cross_A2) / 2
         )
       
-      # Generate unique price sequences for each product (including 0)
+      # For Product B:
+      df <- df %>%
+        mutate(
+          slope_B1 = (Q_B_max_0 - Q_B_0_0) / P_max_B,
+          slope_B2 = (Q_B_max_max - Q_B_0_max) / P_max_B,
+          slope_B  = (slope_B1 + slope_B2) / 2,
+          cross_B1 = (Q_B_0_max - Q_B_0_0) / P_max_A,
+          cross_B2 = (Q_B_max_max - Q_B_max_0) / P_max_A,
+          gamma_B  = (cross_B1 + cross_B2) / 2
+        )
+      
+      # Create a grid of possible prices for each product.
       price_seq_A <- unique(sort(na.omit(df$P_max_A)))
       price_seq_A <- c(0, price_seq_A)
       price_seq_B <- unique(sort(na.omit(df$P_max_B)))
       price_seq_B <- c(0, price_seq_B)
-      
-      # Create a grid of all possible price pairs:
       grid <- expand.grid(P_A = price_seq_A, P_B = price_seq_B)
       
-      # For each respondent, compute predicted quantities at every price pair.
-      # Here we ignore cross-price effects for simplicity.
+      # For each respondent, predict Q_A and Q_B at each combination.
       df_pred <- df %>% rowwise() %>% mutate(
-        Q_A_pred = list(map_dbl(grid$P_A, function(P_A) {
+        Q_A_pred = list(map2_dbl(grid$P_A, grid$P_B, function(P_A, P_B) {
+          # If P_A exceeds maximum willingness-to-pay, then demand is 0:
           if (P_A > P_max_A) return(0)
-          intercept_A + slope_A * P_A
+          Q_A_0_0 + slope_A * P_A + gamma_A * P_B
         })),
-        Q_B_pred = list(map_dbl(grid$P_B, function(P_B) {
+        Q_B_pred = list(map2_dbl(grid$P_A, grid$P_B, function(P_A, P_B) {
           if (P_B > P_max_B) return(0)
-          intercept_B + slope_B * P_B
+          Q_B_0_0 + slope_B * P_B + gamma_B * P_A
         }))
       ) %>% ungroup()
       
-      # Combine predictions into a long data frame.
-      # For each respondent, replicate the grid and attach the predictions.
+      # Expand predictions: for each respondent, replicate the grid and attach predictions.
       final_predictions <- df_pred %>%
         select(Respondent, Q_A_pred, Q_B_pred) %>%
         mutate(row = row_number()) %>%
         group_by(Respondent) %>%
         do({
           respondent <- .
-          n <- nrow(grid)
           tibble(
             Respondent = respondent$Respondent,
-            P_A = grid$P_A,
-            P_B = grid$P_B,
+            priceA = grid$P_A,
+            priceB = grid$P_B,
             Q_A_pred = respondent$Q_A_pred[[1]],
             Q_B_pred = respondent$Q_B_pred[[1]]
           )
         }) %>% ungroup()
       
-      # Aggregate across respondents to get market predictions:
       market_quantity <- final_predictions %>%
-        group_by(P_A, P_B) %>%
+        group_by(priceA, priceB) %>%
         summarise(
           quantityA = sum(Q_A_pred, na.rm = TRUE),
           quantityB = sum(Q_B_pred, na.rm = TRUE),
           .groups = "drop"
         ) %>%
-        arrange(desc(P_A), desc(P_B))
-      
+        arrange(desc(priceA), desc(priceB))
+
       return(list(
-        individual = final_predictions,
-        market = market_quantity
-      ))
+        transformed_data = market_quantity,
+        nSample = nSample
+      ))      
+      
+#      return(market_quantity)
     }
     
     
@@ -232,25 +289,81 @@ transformDataServer <- function(id, data) {
       # Use the reactive transformation_type, not input$transformation_type
       trans_type <- transformation_type()
       
+#      
+# Durable goods transformation --------------------------------------------
+#      
       if (trans_type == "Durable Goods (Competition)") {
         req(input$wtpCol_firm1, input$wtpCol_firm2)
-        transformed_data <- data() %>%
+        
+        # Check if columns have been selected (nonempty strings)
+        if (is.null(input$wtpCol_firm1) || input$wtpCol_firm1 == "" ||
+            is.null(input$wtpCol_firm2) || input$wtpCol_firm2 == "" ||
+            input$wtpCol_firm1 == input$wtpCol_firm2) {
+          showNotification("Please select two different numeric willingness-to-pay columns.", type = "error")
+          return(NULL)
+        }
+        
+        # Create a temporary data frame with the chosen columns renamed
+        # Filter out rows with missing values
+        df_filtered <- data() %>%
           rename(wtp1 = !!sym(input$wtpCol_firm1),
                  wtp2 = !!sym(input$wtpCol_firm2)) %>%
-          filter(!is.na(wtp1) & !is.na(wtp2)) %>%
+          filter(!is.na(wtp1) & !is.na(wtp2))
+        
+        # Calculate sample size (number of valid respondents)
+        nSample <- nrow(df_filtered)
+
+        observe({
+          print(nSample)
+        })
+                
+        
+        if (!is.numeric(df_filtered$wtp1) || !is.numeric(df_filtered$wtp2)) {
+          showNotification("Selected WTP columns must be numeric.", type = "error")
+          return(NULL)
+        }
+        
+        
+        transformed_data <- df_filtered %>%
+          #filter(!is.na(wtp1) & !is.na(wtp2)) %>% # filtered above
           group_by(wtp1, wtp2) %>%
           summarize(wtp_1_2_count = n(), .groups = "drop") %>%
           arrange(desc(wtp1), wtp2) %>%
           mutate(quantity1 = cumsum(wtp_1_2_count)) %>%
           arrange(desc(wtp2), wtp1) %>%
           mutate(quantity2 = cumsum(wtp_1_2_count)) %>%
-          mutate(price1 = wtp1,
-                 price2 = wtp2)
-        return(transformed_data)
+          mutate(priceA = wtp1,
+                 priceB = wtp2) %>%
+          rename(quantityA = quantity1,
+                 quantityB = quantity2)
+        return(list(transformed_data = transformed_data, nSample = nSample))
         
+        
+#
+# Nondurable goods with prices  -------------------------------------------
+#        
       } else if (trans_type == "Non-Durable (Prices)") {
+        
+# nondurable prices with standard naming ----------------------------------
         if (input$mapping_mode == "Standard Naming Convention") {
-          transformed_data <- data() %>%
+          
+          cols_matched <- names(data())[grepl("^Q[AaBb]P[aA](?:\\d*\\.?\\d+)P[bB](?:\\d*\\.?\\d+)$", names(data()))]
+          if(length(cols_matched) == 0) {
+            showNotification("No columns found matching the expected naming convention. Please check your dataset or rename your columns accordingly.", type = "error")
+            return(tibble())
+          }
+          
+          data_with_id <- reactive({
+            if (!"Respondent" %in% names(data())) {
+              data() %>% mutate(Respondent = row_number())
+            } else {
+              data()
+            }
+          })
+            
+#          transformed_data <- filtered_data %>%
+            
+          longer_data <- data_with_id() %>%            
             pivot_longer(
               cols = matches("^Q[AaBb]P[aA](?:\\d*\\.?\\d+)P[bB](?:\\d*\\.?\\d+)$"),
               names_to = c("prod", "priceA", "priceB"),
@@ -261,7 +374,14 @@ transformDataServer <- function(id, data) {
               prod = if_else(toupper(prod) == "A", "quantityA", "quantityB"),
               priceA = as.numeric(priceA),
               priceB = as.numeric(priceB)
-            ) %>%
+            ) 
+          
+          filtered_data <- longer_data %>%
+            filter(!is.na(quantity)) 
+          
+          nSample <- n_distinct(filtered$Respondent)
+          
+          transformed_data <- filtered_data %>%
             pivot_wider(
               names_from = prod,
               values_from = quantity
@@ -270,10 +390,23 @@ transformDataServer <- function(id, data) {
             summarise(quantityA = sum(quantityA, na.rm = TRUE),
                       quantityB = sum(quantityB, na.rm = TRUE),
                       .groups = "drop")
-          return(transformed_data)
           
+          return(list(
+            transformed_data = transformed_data,
+            nSample = nSample
+          ))
+          #return(transformed_data)
+          
+
+# nondurable prices with custom price-pair mapping ------------------------
         } else if (input$mapping_mode == "Custom Mapping") {
           req(input$numPairs)
+          
+          if (input$numPairs < 4) {
+            showNotification("Please select at least 4 price pairs for reliable demand estimation.", type = "error")
+            return(tibble())
+          }
+          
           mappingValues <- lapply(seq_len(input$numPairs), function(i) {
             list(
               price1 = input[[paste0("price1_", i)]],
@@ -289,37 +422,77 @@ transformDataServer <- function(id, data) {
             df_subset <- data() %>%
               select(any_of(c("Respondent", m$qtyFirm1, m$qtyFirm2))) %>%
               rename(
-                quantityFirm1 = !!sym(m$qtyFirm1),
-                quantityFirm2 = !!sym(m$qtyFirm2)
+                qtyFirm1 = !!sym(m$qtyFirm1),
+                qtyFirm2 = !!sym(m$qtyFirm2)
               ) %>%
               mutate(
-                Price1 = m$price1,
-                Price2 = m$price2
-              )
+                priceA = m$price1,
+                priceB = m$price2
+              ) 
             return(df_subset)
           })
           transformed_data_list <- Filter(Negate(is.null), transformed_data_list)
-          transformed_data <- bind_rows(transformed_data_list)
-          return(transformed_data)
+          intermediate_data <- bind_rows(transformed_data_list)
+          #return(transformed_data)
+          
+          # Create an intermediate filtered data object.
+          # Here you might want to require that both quantity columns are non-missing.
+          filtered_data <- intermediate_data %>%
+            filter(!is.na(qtyFirm1) & !is.na(qtyFirm2))
+          
+          nSample = nrow(filtered_data)
+          
+          # Now aggregate the individual-level data to sample-level data.
+          aggregated_data <- filtered_data %>%
+            group_by(priceA, priceB) %>%
+            summarise(quantityA = sum(qtyFirm1, na.rm = TRUE),
+                      quantityB = sum(qtyFirm2, na.rm = TRUE),
+                      .groups = "drop")
+          
+          return(list(
+            transformed_data = aggregated_data,
+            nSample = nSample
+            ))
         }
-        
+
+#
+# Nondurable WTP data -----------------------------------------------------
+#        
       } else if (trans_type == "Non-Durable (WTP)") {
-        return(tibble::tibble(Message = "Non-Durable (WTP) transformation not implemented yet."))
+        # Build the vector of selected columns from the UI:
+        selected_cols <- c(input$col_P_max_A, input$col_Q_A_max_0, input$col_Q_A_0_0,
+                           input$col_Q_A_0_max, input$col_Q_A_max_max,
+                           input$col_P_max_B, input$col_Q_B_max_0, input$col_Q_B_0_0,
+                           input$col_Q_B_0_max, input$col_Q_B_max_max)
+        # Check that all selections are unique:
+        if(length(unique(selected_cols)) < length(selected_cols)) {
+          showNotification("Please select 10 unique columns. Duplicate selections are not allowed.", type = "error")
+          return(NULL)
+        }
+        # Now call your transformation function.
+        result <- transformNonDurableWTP(data(), selected_cols)
+        return(result)
+ 
+#
+# unknown transformation type ---------------------------------------------
+#
       } else {
         return(tibble::tibble(Message = "Unknown transformation type."))
       }
     })
 
+
     # Create a UI element for the transformed output.
     transformed <- reactive({
       req(rawTransformed())
-      if ("Message" %in% names(rawTransformed())) {
-        return(tags$p(rawTransformed()$Message[1]))
+      res <- rawTransformed()
+      if ("Message" %in% names(res)) {
+        return(tags$p(res$Message[1]))
+      } else if ("Mappings" %in% names(res)) {
+        return(DT::datatable(res$transformed_data))
+      } else {
+        return(DT::datatable(res$transformed_data))
       }
-      if ("Mappings" %in% names(rawTransformed())) {
-        return(DT::datatable(rawTransformed()))
-      }
-      DT::datatable(rawTransformed())
     })
     
     output$transform_result <- renderUI({
@@ -329,8 +502,15 @@ transformDataServer <- function(id, data) {
     
     output$transform_summary_stats <- renderPrint({
       req(rawTransformed())
-      summary(rawTransformed())
+      summary(rawTransformed()$transformed_data)
     })
+    
+#    observe({
+#      print(rawTransformed())
+#      print(summary(rawTransformed()$transformed_data))
+#    })
+    
+    return(rawTransformed)
     
   })
 }
