@@ -379,7 +379,7 @@ transformDataServer <- function(id, data) {
           filtered_data <- longer_data %>%
             filter(!is.na(quantity)) 
           
-          nSample <- n_distinct(filtered$Respondent)
+          nSample <- n_distinct(filtered_data$Respondent)
           
           transformed_data <- filtered_data %>%
             pivot_wider(

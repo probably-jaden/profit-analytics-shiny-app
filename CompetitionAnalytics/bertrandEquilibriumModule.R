@@ -476,8 +476,8 @@ bertrandEquilibriumServer <- function(id, demandResults, tData, nSample) {
       
       # Plot the reaction functions using geom_line()
       ggplot(plot_data, aes(x = PB)) +
-        geom_line(aes(y = PA_reaction), color = "royalblue3", size = 1.5) +
-        geom_line(aes(y = PA_inverse), color = "steelblue3", size = 1.5) +
+        geom_line(aes(y = PA_reaction), color = "royalblue3", linewidth = 1.5) +
+        geom_line(aes(y = PA_inverse), color = "steelblue3", linewidth = 1.5) +
         
         annotate("segment", x = input$dynamicRivalPrice_A, xend = input$dynamicRivalPrice_A, y = 0, yend = eq$reactionFunc_A(input$dynamicRivalPrice_A), 
                  linetype = "dashed", color = "black", linewidth = 0.25) +
@@ -645,8 +645,8 @@ bertrandEquilibriumServer <- function(id, demandResults, tData, nSample) {
                  y = rival_price, yend = rival_price,
                  linetype = "dashed", color = "black", linewidth = 0.25) +
         
-        geom_line(aes(y = PA_reaction), color = "royalblue3", size = 1.5) +
-        geom_line(aes(y = PA_inverse), color = "steelblue3", size = 1.5) +
+        geom_line(aes(y = PA_reaction), color = "royalblue3", linewidth = 1.5) +
+        geom_line(aes(y = PA_inverse), color = "steelblue3", linewidth = 1.5) +
         
         annotate("segment", x = 0, xend = eq$calc$Pb, y = eq$calc$Pa, yend = eq$calc$Pa,
                  linetype = "solid", # 1 unit dash, 0.2 unit gap

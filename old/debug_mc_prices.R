@@ -2,7 +2,7 @@ library(tidyverse)
 library(readr)
 
 
-mc <- read_csv("~/Dropbox/Teaching/Ent Analytics Book/shiny_app/muscle_cola_competition_ppppp_std.csv")
+#mc <- read_csv("~/Dropbox/Teaching/Ent Analytics Book/shiny_app/muscle_cola_competition_ppppp_std.csv")
 
 (mctest <- mc |> 
   select(c(QaPa.5Pb1.5, QbPa.5Pb1.5, QaPa1Pb1.5, QbPa1Pb1.5)))

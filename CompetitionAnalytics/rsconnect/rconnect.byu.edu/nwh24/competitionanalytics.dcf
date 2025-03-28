@@ -1,0 +1,12 @@
+name: competitionanalytics
+title: CompetitionAnalytics
+username: nwh24
+account: nwh24
+server: rconnect.byu.edu
+hostUrl: https://rconnect.byu.edu/__api__
+appId: 143
+bundleId: 1235
+url: https://rconnect.byu.edu/CompetitionAnalytics/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
