@@ -1,19 +1,30 @@
 library(shiny)
+library(shinyWidgets)
 
 # Define color variables
-colorA0 <- "dodgerblue4"
-colorB0 <- "dodgerblue1"
-colorA1 <- "seagreen4"
-colorB1 <- "seagreen1"
-colorA2 <- "orchid4"
-colorB2 <- "orchid1"
-colorCA <- "orangered3"
-colorCB <- "darksalmon"
-colorFA  <- "black"
-colorFB  <- "gray"
+# colorA0 <- "dodgerblue4"   # a0 slider track color
+# colorB0 <- "dodgerblue1"   # b0 slider track color
+# colorA1 <- "seagreen4"      # a1 slider track color
+# colorB1 <- "seagreen1"      # b1 slider track color
+# colorA2 <- "orchid4"        # a2 slider track color
+# colorB2 <- "orchid1"        # b2 slider track color
+# colorCA <- "orangered3"     # cA slider track color
+# colorCB <- "darksalmon"     # cB slider track color
+# colorFA <- "black"          # fA slider track color
+# colorFB <- "gray"           # fB slider track color
+# 
+# # Create a vector of colors in the desired order
+# slider_colors <- c(colorA0, colorB0, 
+#                    colorA1, colorB1, 
+#                    colorA2, colorB2, 
+#                    colorCA, colorCB, 
+#                    colorFA, colorFB)
 
 ui <- fluidPage(
   titlePanel("Competitive Advantage Sensitivity Analysis"),
+  
+  chooseSliderSkin("Square"),
+  
   sidebarLayout(
     sidebarPanel(
       h3("Outcome Selector"),
@@ -21,82 +32,53 @@ ui <- fluidPage(
                   choices = c("Price", "Quantity", "Profit", "Margin", "Market Share"),
                   selected = "Profit"),
       h3("Baseline Parameters"),
-      # Intercepts Group
-      tags$div(
-        tags$h4("Intercept", style = "color: colorA0;"),
-        sliderInput("a0", 
-                    label = HTML('<span style="color: colorA0;">a0 (Intercept, Firm A):</span>'),
-                    min = 0, max = 200, value = 100),
-        sliderInput("b0", 
-                    label = HTML('<span style="color: colorB0;">b0 (Intercept, Firm B):</span>'),
-                    min = 0, max = 200, value = 100)
-      ),
-      # Own-Price Coefficient Group
-      tags$div(
-        tags$h4("Own-Price Coefficient", style = "color: colorA1;"),
-        sliderInput("a1", 
-                    label = HTML('<span style="color: colorA1;">a1 (Own-Price, Firm A):</span>'),
-                    min = -4, max = -0.5, value = -2, step = 0.1),
-        sliderInput("b1", 
-                    label = HTML('<span style="color: colorB1;">b1 (Own-Price, Firm B):</span>'),
-                    min = -4, max = -0.5, value = -2, step = 0.1)
-      ),
-      # Cross-Price Coefficient Group
-      tags$div(
-        tags$h4("Cross-Price Coefficient", style = "color: colorA3;"),
-        sliderInput("a2", 
-                    label = HTML('<span style="color: colorA3;">a2 (Cross-Price, Firm A):</span>'),
-                    min = 0, max = 2, value = 1, step = 0.1),
-        sliderInput("b2", 
-                    label = HTML('<span style="color: colorB3;">b2 (Cross-Price, Firm B):</span>'),
-                    min = 0, max = 2, value = 1, step = 0.1)
-      ),
-      # Variable Cost Group
-      tags$div(
-        tags$h4("Variable Cost", style = "color: colorCA;"),
-        sliderInput("cA", 
-                    label = HTML('<span style="color: colorCA;">cA (Variable Cost, Firm A):</span>'),
-                    min = 0, max = 50, value = 25),
-        sliderInput("cB", 
-                    label = HTML('<span style="color: colorCB;">cB (Variable Cost, Firm B):</span>'),
-                    min = 0, max = 50, value = 25)
-      ),
-      # Fixed Cost Group
-      tags$div(
-        tags$h4("Fixed Cost", style = "color: colorFA;"),
-        sliderInput("fA", 
-                    label = HTML('<span style="color: colorFA;">fA (Fixed Cost, Firm A):</span>'),
-                    min = 0, max = 100, value = 0),
-        sliderInput("fB", 
-                    label = HTML('<span style="color: colorFA;">fB (Fixed Cost, Firm B):</span>'),
-                    min = 0, max = 100, value = 0)
-      ),
+      
+      # Group: Intercept
+      h4("Market Size"),
+      sliderInput("a0", label = "a0 (Intercept, Firm A):", 
+                  min = 0, max = 200, value = 100),
+      sliderInput("b0", label = "b0 (Intercept, Firm B):", 
+                  min = 0, max = 200, value = 100),
+      
+      # Group: Own-Price Coefficient
+      h4("Price Sensitivity"),
+      sliderInput("a1", label = "a1 (Own-Price, Firm A):", 
+                  min = -4, max = -0.5, value = -2, step = 0.1),
+      sliderInput("b1", label = "b1 (Own-Price, Firm B):", 
+                  min = -4, max = -0.5, value = -2, step = 0.1),
+      
+      # Group: Cross-Price Coefficient
+      h4("Customer Loyalty"),
+      sliderInput("a2", label = "a2 (Rival-Price, Firm A):", 
+                  min = 0, max = 2, value = 1, step = 0.1),
+      sliderInput("b2", label = "b2 (Rival-Price, Firm B):", 
+                  min = 0, max = 2, value = 1, step = 0.1),
+      
+      # Group: Variable Cost
+      h4("Variable Cost"),
+      sliderInput("cA", label = "cA (Variable Cost, Firm A):", 
+                  min = 0, max = 50, value = 25),
+      sliderInput("cB", label = "cB (Variable Cost, Firm B):", 
+                  min = 0, max = 50, value = 25),
+      
+      # Group: Fixed Cost
+      h4("Fixed Cost"),
+      sliderInput("fA", label = "fA (Fixed Cost, Firm A):", 
+                  min = 0, max = 100, value = 0),
+      sliderInput("fB", label = "fB (Fixed Cost, Firm B):", 
+                  min = 0, max = 100, value = 0),
+      
       actionButton("reset", "Reset Baseline Values")
     ),
-    # sidebarPanel(
-    #   h3("Outcome Selector"),
-    #   selectInput("outcome", "Select Outcome Variable:",
-    #               choices = c("Price", "Quantity", "Profit", "Margin", "Market Share"),
-    #               selected = "Profit"),
-    #   h3("Baseline Parameters"),
-    #   sliderInput("a0", "a0 (Intercept, Firm A):", min = 0, max = 200, value = 100),
-    #   sliderInput("b0", "b0 (Intercept, Firm B):", min = 0, max = 200, value = 100),
-    #   sliderInput("a1", "a1 (Own-Price Coefficient, Firm A):", min = -4, max = -0.5, value = -2, step = 0.1),
-    #   sliderInput("b1", "b1 (Own-Price Coefficient, Firm B):", min = -4, max = -0.5, value = -2, step = 0.1),
-    #   sliderInput("a2", "a2 (Cross-Price Coefficient, Firm A):", min = 0, max = 2, value = 1, step = 0.1),
-    #   sliderInput("b2", "b2 (Cross-Price Coefficient, Firm B):", min = 0, max = 2, value = 1, step = 0.1),
-    #   sliderInput("cA", "c_A (Variable Cost, Firm A):", min = 0, max = 50, value = 25),
-    #   sliderInput("cB", "c_B (Variable Cost, Firm B):", min = 0, max = 50, value = 25),
-    #   sliderInput("fA", "f_A (Fixed Cost, Firm A):", min = 0, max = 100, value = 0),
-    #   sliderInput("fB", "f_B (Fixed Cost, Firm B):", min = 0, max = 100, value = 0),
-    #   actionButton("reset", "Reset Baseline Values")
-    # ),
     mainPanel(
       h3("Sensitivity Analysis Grid"),
       plotOutput("gridPlot", height = "1200px")
     )
   )
 )
+
+
+
 
 server <- function(input, output, session) {
   

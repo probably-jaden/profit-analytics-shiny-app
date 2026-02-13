@@ -269,8 +269,8 @@ bertrandEquilibriumServer <- function(id, demandResults, tData, nSample) {
                        },
                        
                        "Exponential-Exponential" = {
-                         Pa <- -1 / coef(mA)[2]
-                         Pb <- -1 / coef(mB)[2]
+                         Pa <- (input$variableCost_A * coef(mA)[2] - 1) / coef(mA)[2]              
+                         Pb <- (input$variableCost_B * coef(mB)[2] - 1) / coef(mB)[2]
                          
                          profitFunc_A_local <- function(PA, PB) {
                            R <- marketDemandFunc_A()(PA, PB) * PA
@@ -288,7 +288,8 @@ bertrandEquilibriumServer <- function(id, demandResults, tData, nSample) {
                        },
                        
                        "Exponential-Linear" = {
-                         Pa <- -1 / coef(mA)[2]
+#                         Pa <- -1 / coef(mA)[2]
+                         Pa <- (input$variableCost_A * coef(mA)[2] - 1) / coef(mA)[2]                         
                          Pb <- reactionFunc_B(Pa)
                          list(Pa = Pa, Pb = Pb,
                               profitFunc_A = function(PA, PB) {
@@ -300,7 +301,7 @@ bertrandEquilibriumServer <- function(id, demandResults, tData, nSample) {
                        },
                        
                        "Linear-Exponential" = {
-                         Pb <- -1 / coef(mB)[2]
+                         Pb <- (input$variableCost_B * coef(mB)[2] - 1) / coef(mB)[2]
                          Pa <- reactionFunc_A(Pb)
                          list(Pa = Pa, Pb = Pb,
                               profitFunc_A = function(PA, PB) {
