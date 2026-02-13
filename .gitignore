@@ -2,3 +2,25 @@
 .Rhistory
 .RData
 .Ruserdata
+
+# Data files
+*.csv
+*.xlsx
+*.xls
+*.pdf
+
+# Deployment artifacts
+rsconnect/
+
+# R session junk
+.Rhistory
+.RData
+.Rproj.user/
+
+# Bundles
+*.tar.gz
+bundle-*/
+
+# Old experiments
+old/
+test/
