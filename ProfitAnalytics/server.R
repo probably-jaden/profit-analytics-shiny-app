@@ -1787,14 +1787,14 @@ server <- function(input, output, session) {
       "bg-success"
     }
     
-    # bslib::card(
-    #   bslib::card_header(
-    #     tagList(
-    #       h4("Step 2 — Feasibility"),
-    #       tags$span(class = paste("badge", badge_class), s$classification),
-    #       if (show_assumption_badge) assumptionsStatusBadge() else NULL
-    #     )
-    #   ),
+     bslib::card(
+       bslib::card_header(
+         tagList(
+           h4("Step 2 — Feasibility"),
+           tags$span(class = paste("badge", badge_class), s$classification),
+           if (show_assumption_badge) assumptionsStatusBadge() else NULL
+         )
+       ),
     #   bslib::card_body(
     #     div(class = "text-muted",
     #         "Question: Is profit positive anywhere across plausible prices, given your assumptions?"
@@ -1853,6 +1853,7 @@ server <- function(input, output, session) {
         )
       )
     )
+     )
     
   })
   
@@ -1986,6 +1987,55 @@ server <- function(input, output, session) {
       list(text="This is a relatively wide profit band", cls="bg-success")
     }
     
+    # bslib::card(
+    #   bslib::card_header(
+    #     tagList(
+    #       h4("Step 3 — Fragility"),
+    #       tags$span(class = paste("badge", frag_badge$cls), frag_badge$text),
+    #       assumptionsStatusBadge()
+    #     )
+    #   ),
+    #   bslib::card_body(
+    #     div(class="text-muted",
+    #         "Question: If you’re wrong by a little, does feasibility collapse?"
+    #     ),
+    #     br(),
+    #     plotOutput("fragility_plot", height = "320px"),
+    #     br(),
+    #     bslib::card(
+    #       bslib::card_body(
+    #         div(class="d-flex justify-content-between",
+    #             div(class="text-muted","Break-even price band"),
+    #             div(strong(paste0(
+    #               scales::dollar(fs$p_low), " to ", scales::dollar(fs$p_high)
+    #             )))
+    #         ),
+    #         div(class="d-flex justify-content-between",
+    #             div(class="text-muted","Band width"),
+    #             div(strong(scales::dollar(fs$band_width)))
+    #         ),
+    #         div(class="d-flex justify-content-between",
+    #             div(class="text-muted","Peak within band"),
+    #             div(strong(paste0(
+    #               "P ≈ ", scales::dollar(fs$p_peak), ", π ≈ ", scales::dollar(fs$pi_peak)
+    #             )))
+    #         ),
+    #         div(class="d-flex justify-content-between",
+    #             div(class="text-muted","Median profit inside band"),
+    #             div(strong(scales::dollar(fs$pi_median)))
+    #         ),
+    #         div(class="d-flex justify-content-between",
+    #             div(class="text-muted","10th percentile profit inside band"),
+    #             div(strong(scales::dollar(fs$pi_p10)))
+    #         ),
+    #         div(class="text-muted mt-2",
+    #             "If the band is narrow or profits inside it are close to zero, small errors in demand, costs, or scaling can erase feasibility."
+    #         )
+    #       )
+    #     )
+    #   )
+    # )
+    
     bslib::card(
       bslib::card_header(
         tagList(
@@ -1998,42 +2048,51 @@ server <- function(input, output, session) {
         div(class="text-muted",
             "Question: If you’re wrong by a little, does feasibility collapse?"
         ),
-        br(),
-        plotOutput("fragility_plot", height = "320px"),
-        br(),
-        bslib::card(
-          bslib::card_body(
-            div(class="d-flex justify-content-between",
-                div(class="text-muted","Break-even price band"),
-                div(strong(paste0(
-                  scales::dollar(fs$p_low), " to ", scales::dollar(fs$p_high)
-                )))
-            ),
-            div(class="d-flex justify-content-between",
-                div(class="text-muted","Band width"),
-                div(strong(scales::dollar(fs$band_width)))
-            ),
-            div(class="d-flex justify-content-between",
-                div(class="text-muted","Peak within band"),
-                div(strong(paste0(
-                  "P ≈ ", scales::dollar(fs$p_peak), ", π ≈ ", scales::dollar(fs$pi_peak)
-                )))
-            ),
-            div(class="d-flex justify-content-between",
-                div(class="text-muted","Median profit inside band"),
-                div(strong(scales::dollar(fs$pi_median)))
-            ),
-            div(class="d-flex justify-content-between",
-                div(class="text-muted","10th percentile profit inside band"),
-                div(strong(scales::dollar(fs$pi_p10)))
-            ),
-            div(class="text-muted mt-2",
-                "If the band is narrow or profits inside it are close to zero, small errors in demand, costs, or scaling can erase feasibility."
+        
+        bslib::layout_columns(
+          col_widths = c(8, 4),
+          
+          # LEFT: plot
+          tagList(
+            plotOutput("fragility_plot", height = "320px")
+          ),
+          
+          # RIGHT: summary / interpretation
+          bslib::card(
+            bslib::card_body(
+              div(class="d-flex justify-content-between",
+                  div(class="text-muted","Break-even price band"),
+                  div(strong(paste0(
+                    scales::dollar(fs$p_low), " to ", scales::dollar(fs$p_high)
+                  )))
+              ),
+              div(class="d-flex justify-content-between",
+                  div(class="text-muted","Band width"),
+                  div(strong(scales::dollar(fs$band_width)))
+              ),
+              div(class="d-flex justify-content-between",
+                  div(class="text-muted","Peak within band"),
+                  div(strong(paste0(
+                    "P ≈ ", scales::dollar(fs$p_peak), ", π ≈ ", scales::dollar(fs$pi_peak)
+                  )))
+              ),
+              div(class="d-flex justify-content-between",
+                  div(class="text-muted","Median profit inside band"),
+                  div(strong(scales::dollar(fs$pi_median)))
+              ),
+              div(class="d-flex justify-content-between",
+                  div(class="text-muted","10th percentile profit inside band"),
+                  div(strong(scales::dollar(fs$pi_p10)))
+              ),
+              div(class="text-muted mt-2",
+                  "If the band is narrow or profits inside it are close to zero, small errors in demand, costs, or scaling can erase feasibility."
+              )
             )
           )
         )
       )
     )
+    
   })
   
   
@@ -2417,6 +2476,30 @@ maxProfitUnderFn <- function(
     }
     
     # Your existing Step 5 card/UI follows here unchanged
+    # bslib::card(
+    #   bslib::card_header(
+    #     tagList(
+    #       h4("Step 5 — Optimization lens (optional)"),
+    #       tags$span(class = "badge bg-light text-dark", "Reference only"),
+    #       assumptionsStatusBadge()
+    #     )
+    #   ),
+    #   bslib::card_body(
+    #     div(class="text-muted",
+    #         "This section shows where profit is maximized *inside the model*. It does not tell you what to do."
+    #     ),
+    #     br(),
+    #     plotOutput("optimization_plot", height = "300px"),
+    #     br(),
+    #     # uiOutput("inspect_price_ui"),
+    #     # DTOutput("inspect_price_table"),
+    #     div(class = "mt-2", uiOutput("inspect_price_ui")),
+    #     div(class = "mb-0", DTOutput("inspect_price_table")),
+    #     br(),
+    #     uiOutput("optimization_reference")
+    #   )
+    # )
+    
     bslib::card(
       bslib::card_header(
         tagList(
@@ -2427,17 +2510,31 @@ maxProfitUnderFn <- function(
       ),
       bslib::card_body(
         div(class="text-muted",
-            "This section shows where profit is maximized *inside the model*. It does not tell you what to do."
+            "This section shows where profit is maximized inside the model. It does not tell you what to do."
         ),
-        br(),
-        plotOutput("optimization_plot", height = "300px"),
-        br(),
-        # uiOutput("inspect_price_ui"),
-        # DTOutput("inspect_price_table"),
-        div(class = "mt-2", uiOutput("inspect_price_ui")),
-        div(class = "mb-0", DTOutput("inspect_price_table")),
-        br(),
-        uiOutput("optimization_reference")
+        
+        bslib::layout_columns(
+          col_widths = c(8, 4),
+          
+          # LEFT: optimization plot
+          tagList(
+            plotOutput("optimization_plot", height = "300px")
+          ),
+          
+          # RIGHT: inspection + interpretation
+          bslib::card(
+            bslib::card_body(
+              div(class="text-muted mb-2",
+                  "Use this as a lens, not a prescription. The optimal price here is conditional on your demand model and assumptions."
+              ),
+              
+              div(class = "mt-2", uiOutput("inspect_price_ui")),
+              div(class = "mb-2", DTOutput("inspect_price_table")),
+              
+              uiOutput("optimization_reference")
+            )
+          )
+        )
       )
     )
   })
