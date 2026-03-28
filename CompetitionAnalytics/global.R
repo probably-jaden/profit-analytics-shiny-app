@@ -1,0 +1,33 @@
+# global.R — Loaded automatically by Shiny before ui.R and server.R
+
+library(shiny)
+library(shinyjs)
+library(bslib)
+library(shinyWidgets)
+library(DT)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+library(readr)
+library(ggplot2)
+library(scales)
+library(minpack.lm)
+
+# Utils (pure functions, no Shiny reactivity)
+source("utils/helpers_ui.R")
+source("utils/helpers_transform.R")
+source("utils/helpers_fit.R")
+source("utils/helpers_equilibrium.R")
+source("utils/helpers_profit.R")
+
+# Modules
+source("modules/mod_upload.R")
+source("modules/mod_transform.R")
+source("modules/mod_fit_demand.R")
+source("modules/mod_costs_scale.R")
+source("modules/mod_equilibrium.R")
+source("modules/mod_feasibility.R")
+source("modules/mod_fragility.R")
+source("modules/mod_robustness.R")
+source("modules/mod_eq_lens.R")

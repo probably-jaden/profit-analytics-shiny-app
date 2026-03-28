@@ -1,0 +1,240 @@
+/* ===============================
+   Competition Analytics v2 — custom.css
+   Brand-aligned with Entrepreneurial Analytics book (custom_itwd.css)
+   =============================== */
+
+/* ---------- Brand Variables ---------- */
+/* Identity relay: Book (#0F5132) → PA (green→teal) → CA (teal→blue)
+   CA picks up where PA leaves off, shifting toward blue to
+   visually distinguish the two apps while staying in-family. */
+:root {
+  --ca-primary: #1A7F7A;        /* Deep teal (CA's anchor color) */
+  --ca-primary-dark: #146662;   /* Darker teal */
+  --ca-secondary: #2563EB;      /* Blue (CA's destination color) */
+  --ca-accent: #E3A008;         /* Gold accent (shared with PA) */
+  --ca-muted: #6B7280;          /* Gray for secondary text */
+  --ca-bg-tint: #E6F4F3;        /* Pale teal tint */
+  --ca-text: #1F2937;           /* Rich gray text */
+  --ca-danger: #DC2626;         /* Red for warnings */
+  --ca-locked: #9CA3AF;         /* Gray for locked state */
+}
+
+body {
+  color: var(--ca-text);
+}
+
+/* ---------- App Header ---------- */
+.app-header {
+  background: linear-gradient(90deg, var(--ca-primary) 0%, var(--ca-secondary) 100%);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.app-header h2 {
+  color: white;
+  margin: 0 0 0.25rem 0;
+  font-weight: 500;
+}
+
+.app-header .text-muted {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.app-header .btn-outline-secondary {
+  color: white;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.app-header .btn-outline-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: white;
+  color: white;
+}
+
+/* ---------- Step Cards (outermost level) ---------- */
+.step-card {
+  border-left: 4px solid var(--ca-primary);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.step-card > .card-header {
+  background-color: transparent;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.step-card > .card-header h4 {
+  color: var(--ca-primary);
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Step card states */
+.step-card-locked {
+  border-left-color: var(--ca-locked);
+  opacity: 0.75;
+}
+
+.step-card-locked > .card-header h4 {
+  color: var(--ca-locked);
+}
+
+.step-card-active {
+  border-left-color: var(--ca-secondary);
+}
+
+.step-card-active > .card-header h4 {
+  color: var(--ca-secondary);
+}
+
+.step-card-confirmed {
+  border-left-color: var(--ca-primary);
+}
+
+/* ---------- Start Card (special) ---------- */
+.start-card {
+  border-left: 4px solid var(--ca-primary);
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--ca-bg-tint) 0%, white 60%);
+}
+
+.start-card > .card-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(26, 127, 122, 0.15);
+}
+
+.start-card > .card-header h4 {
+  color: var(--ca-primary);
+  font-weight: 500;
+}
+
+/* ---------- Inner Cards (left/right panels) ---------- */
+.inner-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+}
+
+/* ---------- Accordion Panels ---------- */
+.accordion-button:not(.collapsed) {
+  background-color: var(--ca-bg-tint);
+  color: var(--ca-primary);
+  font-weight: 500;
+}
+
+.accordion-button:focus {
+  box-shadow: 0 0 0 0.2rem rgba(26, 127, 122, 0.25);
+}
+
+/* ---------- Product Labels ---------- */
+.product-yours {
+  border-left: 3px solid #0F5132;
+  padding-left: 0.75rem;
+}
+
+.product-rival {
+  border-left: 3px solid var(--ca-accent);
+  padding-left: 0.75rem;
+}
+
+.label-yours {
+  color: #0F5132;
+  font-weight: 600;
+}
+
+.label-rival {
+  color: #B8860B;
+  font-weight: 600;
+}
+
+/* ---------- Badges ---------- */
+.badge.bg-confirmed {
+  background-color: var(--ca-primary) !important;
+}
+
+.badge.bg-pending {
+  background-color: var(--ca-accent) !important;
+  color: var(--ca-text) !important;
+}
+
+.badge.bg-locked {
+  background-color: var(--ca-locked) !important;
+}
+
+/* ---------- Buttons ---------- */
+.btn-primary {
+  background-color: var(--ca-primary);
+  border-color: var(--ca-primary);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--ca-primary-dark);
+  border-color: var(--ca-primary-dark);
+}
+
+.btn-outline-primary {
+  color: var(--ca-primary);
+  border-color: var(--ca-primary);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--ca-primary);
+  color: white;
+}
+
+.btn-tech-details {
+  font-size: 0.85rem;
+  color: var(--ca-muted);
+  border-color: #d1d5db;
+}
+
+.btn-tech-details:hover {
+  color: var(--ca-primary);
+  border-color: var(--ca-primary);
+  background: var(--ca-bg-tint);
+}
+
+/* ---------- Radio Buttons (model selection) ---------- */
+.model-radio .form-check {
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.25rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.model-radio .form-check:has(input:checked) {
+  border-color: var(--ca-secondary);
+  background: var(--ca-bg-tint);
+}
+
+/* ---------- Feasibility Plot Styling Hints ---------- */
+/* These are applied via ggplot, not CSS, but document the intent:
+   - Feasibility: geom_ribbon fill between curve and y=0 (positive region only)
+     Fill color: #1F9D8A33 (ca-secondary at 20% opacity)
+     Peak profit: dashed horizontal line + point
+   - Fragility: vertical band between breakeven prices
+     Band fill: #E3A00822 (ca-accent at ~13% opacity)
+     Breakeven lines: dotted vertical
+*/
+
+/* ---------- Equilibrium Lens ---------- */
+.eq-summary-table th {
+  background-color: var(--ca-bg-tint);
+  color: var(--ca-primary);
+  font-weight: 600;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .step-card {
+    border-left-width: 3px;
+  }
+}
