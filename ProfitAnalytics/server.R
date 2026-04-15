@@ -8,6 +8,9 @@ library(stringr)
 library(purrr)
 library(readr)
 library(ggplot2)
+library(brms)
+
+source("R/helpers_wtp_dist.R")
 
 server <- function(input, output, session) {
 
@@ -53,13 +56,26 @@ server <- function(input, output, session) {
   fitArmed <- reactiveVal(FALSE)
   step1bConfirmed <- reactiveVal(FALSE)
 
-    # Disarm fitting any time upstream inputs change
+    # Disarm fitting any time upstream (Step 1A/1B) inputs change.
+  # NOTE: do NOT include input$dist_type or input$model_type here — those are
+  # dynamic selectors rendered INSIDE Step 1C after step1bConfirmed flips TRUE.
+  # Including them would immediately reset step1bConfirmed the moment the UI
+  # materializes (NULL -> default value counts as a change), causing
+  # wtpFitResult()'s req(step1bConfirmed()) to silently fail and the demand
+  # plot to never render.
   observeEvent(list(
     input$demand_type, input$yn_wtp_col,
     input$howmany_method, input$hm_start_price, input$hm_end_price,
     input$hm_pmax_col, input$hm_q_at_pmax_col, input$hm_q0_col
   ), {
-    step1bConfirmed(FALSE)         
+    step1bConfirmed(FALSE)
+    fitArmed(FALSE)
+  }, ignoreInit = TRUE)
+
+  # Within-1C model-selector changes: only disarm the 1C->1D gate (user must
+  # re-click "Next" to propagate the new fit to Steps 2-5). Do not invalidate
+  # step1bConfirmed, otherwise the 1C preview reactives silently abort.
+  observeEvent(list(input$dist_type, input$model_type), {
     fitArmed(FALSE)
   }, ignoreInit = TRUE)
 
@@ -476,9 +492,33 @@ server <- function(input, output, session) {
     out
   })
   
+  # ---- Output: demand table header (dynamic label) ----
+  output$demand_table_header_ui <- renderUI({
+    if (identical(input$demand_type, "yesno")) {
+      h6("WTP frequency table (max price per respondent)")
+    } else {
+      h6("Transformed demand table (price, quantity)")
+    }
+  })
+
   # ---- Output: transformed demand table preview ----
   output$demand_table_preview <- DT::renderDT({
     req(transformedDemand())
+
+    # For yes/no demand: show raw WTP frequency table (no cumsum quantity)
+    if (identical(input$demand_type, "yesno")) {
+      req(input$yn_wtp_col)
+      df <- rawData()
+      wtp_raw <- suppressWarnings(readr::parse_number(as.character(df[[input$yn_wtp_col]])))
+      hist_df <- tibble::tibble(wtp = wtp_raw) |>
+        dplyr::filter(!is.na(wtp), wtp >= 0) |>
+        dplyr::group_by(wtp) |>
+        dplyr::summarise(respondents = dplyr::n(), .groups = "drop") |>
+        dplyr::arrange(wtp) |>
+        dplyr::rename(`WTP (max price)` = wtp, `# respondents` = respondents)
+      return(DT::datatable(hist_df, options = list(pageLength = 10, dom = "tip"), rownames = FALSE))
+    }
+
     DT::datatable(
       transformedDemand(),
       options = list(pageLength = 10, dom = "tip"),
@@ -677,10 +717,122 @@ server <- function(input, output, session) {
     )
   })
   
+  # ---- Step 1C: dynamic selector (distribution vs model type) ----
+  output$ui_step1c_model_selector <- renderUI({
+    if (identical(input$demand_type, "yesno")) {
+      tagList(
+        selectInput(
+          "dist_type",
+          "WTP distribution",
+          choices  = c("Log-normal", "Gamma", "Weibull"),
+          selected = "Log-normal"
+        ),
+        div(class = "text-muted",
+            "Bayesian MCMC fit (via brms). Fitting may take 15\u201330 seconds.")
+      )
+    } else {
+      selectInput(
+        "model_type",
+        "Demand model form",
+        choices  = c("Linear", "Exponential", "Sigmoid"),
+        selected = "Sigmoid"
+      )
+    }
+  })
+
+  # ---- Bayesian WTP distribution fit (yes/no demand only) ----
+  # NOTE: showNotification must NOT live here — side-effects belong in observers.
+  # NOTE: n_chains = 1 avoids spawning parallel child processes inside Shiny/RStudio.
+  wtpFitResult <- reactive({
+    req(identical(input$demand_type, "yesno"))
+    req(input$yn_wtp_col, input$dist_type)
+    req(step1bConfirmed())
+
+    message("[wtpFitResult] Starting — dist: ", input$dist_type, "  col: ", input$yn_wtp_col)
+
+    df      <- rawData()
+    wtp_raw <- suppressWarnings(readr::parse_number(as.character(df[[input$yn_wtp_col]])))
+    wtp_pos <- wtp_raw[!is.na(wtp_raw) & wtp_raw > 0]
+
+    message("[wtpFitResult] n_positive WTP: ", length(wtp_pos))
+    validate(need(length(wtp_pos) >= 3,
+                  "Need at least 3 positive WTP values for distribution fitting."))
+
+    result <- tryCatch(
+      fit_wtp_dist(wtp_pos, input$dist_type, n_iter = 2000, n_chains = 1),
+      error = function(e) {
+        message("[wtpFitResult] ERROR: ", conditionMessage(e))
+        validate(need(FALSE, paste("Distribution fit failed:", conditionMessage(e))))
+      }
+    )
+    message("[wtpFitResult] Done — n_obs: ", result$n_obs)
+    result
+  })
+
+  # Show a notification while the fit is computing (observer, not reactive)
+  observeEvent(step1bConfirmed(), {
+    req(step1bConfirmed())
+    req(identical(input$demand_type, "yesno"))
+    showNotification(
+      "Fitting Bayesian WTP model (MCMC)\u2026 this takes a few seconds.",
+      id       = "wtp_fitting_notif",
+      duration = 8,
+      type     = "message"
+    )
+  }, ignoreInit = TRUE)
+
+  # ---- PPD survival curve (yes/no demand only) ----
+  wtpPpdSurvival <- reactive({
+    fit_result <- wtpFitResult()   # single call — reactive caches the value
+    req(fit_result)
+    tb <- transformedDemand()
+
+    p_min <- suppressWarnings(min(tb$price, na.rm = TRUE))
+    p_max <- suppressWarnings(max(tb$price, na.rm = TRUE))
+    validate(need(is.finite(p_min) && is.finite(p_max) && p_max > p_min,
+                  "Price range not valid for survival curve."))
+    price_grid <- seq(p_min, p_max, length.out = 200)
+
+    message("[wtpPpdSurvival] Computing PPD survival over ", length(price_grid), " prices")
+    result <- compute_ppd_survival(fit_result$posterior_df, fit_result$distribution, price_grid)
+    message("[wtpPpdSurvival] Done — ", nrow(result), " rows")
+    result
+  })
+
   # ---- Fit demand model (sample) ----
   # ---- Demand Fit: returns a predict_func used everywhere downstream ----
   demandFitPreview <- reactive({
-    req(transformedDemand(), input$model_type)
+    req(transformedDemand())
+
+    # ── YES/NO: Bayesian distribution path ──────────────────────────────────
+    if (identical(input$demand_type, "yesno")) {
+      req(input$dist_type)
+      message("[demandFitPreview] yesno path — waiting for wtpFitResult")
+      fit_result <- wtpFitResult()
+      req(fit_result)
+      message("[demandFitPreview] wtpFitResult OK — waiting for wtpPpdSurvival")
+      ppd_surv <- wtpPpdSurvival()
+      req(ppd_surv)
+      message("[demandFitPreview] ppd_surv OK — building predict_func")
+
+      predict_func <- make_predict_func_dist(ppd_surv, fit_result$n_obs)
+      message("[demandFitPreview] Done — returning fit list")
+
+      return(list(
+        model_type   = fit_result$distribution,
+        model        = NULL,
+        predict_func = predict_func,
+        r2           = NA_real_,
+        data         = transformedDemand(),
+        is_dist_fit  = TRUE,
+        fit_result   = fit_result,
+        ppd_survival = ppd_surv,
+        n_obs        = fit_result$n_obs
+      ))
+    }
+
+    # ── HOW-MANY: existing OLS path ─────────────────────────────────────────
+    req(input$model_type)
     tb <- transformedDemand()
     
     validate(need(nrow(tb) >= 3, "Need at least 3 demand points to fit a model."))
@@ -752,37 +904,61 @@ server <- function(input, output, session) {
     req(transformedDemand())
     fit <- demandFitPreview()
     req(fit)
-    
-    tb  <- transformedDemand()
+
+    # YES/NO: histogram with PPD density overlays
+    if (isTRUE(fit$is_dist_fit)) {
+      req(fit$fit_result)
+      message("[demand_plot] Rendering histogram — dist: ", fit$model_type)
+      df        <- rawData()
+      wtp_raw   <- suppressWarnings(readr::parse_number(as.character(df[[input$yn_wtp_col]])))
+      wtp_clean <- wtp_raw[!is.na(wtp_raw) & wtp_raw > 0]
+      return(plot_wtp_histogram_ppd(wtp_clean, fit$fit_result$posterior_df, fit$model_type))
+    }
+
+    # HOW-MANY: existing OLS scatter + fitted curve
+    message("[demand_plot] Rendering OLS scatter — model: ", fit$model_type)
+    tb   <- transformedDemand()
     qhat <- fit$predict_func
-    
+
     validate(
       need(nrow(tb) >= 3, "Need at least 3 demand points to draw the curve."),
-      need(is.function(qhat), "predict_func is missing—check demandFitPreview().")
+      need(is.function(qhat), "predict_func is missing\u2014check demandFitPreview().")
     )
-    
+
     p_min <- 0
     p_max <- max(tb$price, na.rm = TRUE)
     validate(need(is.finite(p_max) && p_max > 0, "Price must be numeric and positive."))
-    
+
     pgrid <- seq(p_min, p_max, length.out = 200)
-    
+
     pred <- dplyr::tibble(
-      price = pgrid,
+      price    = pgrid,
       quantity = base::pmax(0, qhat(pgrid))
     )
-    
+
     ggplot2::ggplot(tb, ggplot2::aes(x = price, y = quantity)) +
       ggplot2::geom_point() +
       ggplot2::geom_line(data = pred, linewidth = 2, color = "cornflowerblue") +
       ggplot2::labs(
-        title = paste0("Sample demand fit — ", fit$model_type),
-        subtitle = paste0("R²: ", format(round(fit$r2, 4), nsmall = 4), " (conditional on your sample)"),
-        x = "Price",
-        y = "Quantity"
+        title    = paste0("Sample demand fit \u2014 ", fit$model_type),
+        subtitle = paste0("R\u00b2: ", format(round(fit$r2, 4), nsmall = 4), " (conditional on your sample)"),
+        x        = "Price",
+        y        = "Quantity"
       ) +
       ggplot2::theme_minimal() +
       ggplot2::scale_x_continuous(labels = scales::dollar)
+  })
+
+  # ---- Survival curve plot (yes/no demand only) ----
+  output$demand_survival_plot <- renderPlot({
+    req(identical(input$demand_type, "yesno"))
+    fit <- demandFitPreview()
+    req(isTRUE(fit$is_dist_fit), fit$ppd_survival)
+
+    df <- rawData()
+    wtp_raw <- suppressWarnings(readr::parse_number(as.character(df[[input$yn_wtp_col]])))
+
+    plot_survival_curve_ppd(wtp_raw, fit$ppd_survival)
   })
   
   # ---- Format a copyable demand equation (plain text) ----
@@ -821,6 +997,17 @@ server <- function(input, output, session) {
   output$demand_equation_text <- renderText({
     fit <- demandFitPreview()
     req(fit)
+
+    if (isTRUE(fit$is_dist_fit)) {
+      fr <- fit$fit_result
+      return(paste0(
+        "Distribution: ", fr$distribution, "\n",
+        "N (positive WTP): ", fr$n_obs, "\n",
+        "Method: Bayesian MCMC via brms\n",
+        "Demand: Q(P) = n \u00d7 P(WTP \u2265 P)  [PPD survival proportion]"
+      ))
+    }
+
     formatDemandEquationText(fit$model, fit$model_type)
   })
   
@@ -829,52 +1016,98 @@ server <- function(input, output, session) {
     req(transformedDemand())
     fit <- demandFitPreview()
     req(fit)
-    
+
+    # YES/NO: Bayesian distribution fit summary
+    if (isTRUE(fit$is_dist_fit)) {
+      fr <- fit$fit_result
+      pd <- fr$posterior_df
+
+      posterior_summary <- tryCatch({
+        if (fr$distribution == "Log-normal") {
+          paste0("log-mean \u03bc = ", round(median(pd$b_Intercept), 3),
+                 ", log-SD \u03c3 = ", round(median(pd$sigma), 3))
+        } else if (fr$distribution == "Gamma") {
+          paste0("mean = ", round(exp(median(pd$b_Intercept)), 3),
+                 ", shape = ", round(median(pd$shape), 3))
+        } else {
+          paste0("scale = ", round(exp(median(pd$b_Intercept)), 3),
+                 ", shape = ", round(median(pd$shape), 3))
+        }
+      }, error = function(e) "Parameters not available")
+
+      return(bslib::card(
+        bslib::card_header("Fit & data strength"),
+        bslib::card_body(
+          div(class = "d-flex justify-content-between",
+              div(class = "text-muted", "Distribution"),
+              div(strong(fr$distribution))
+          ),
+          div(class = "d-flex justify-content-between",
+              div(class = "text-muted", "WTP observations used"),
+              div(strong(fr$n_obs))
+          ),
+          div(class = "d-flex justify-content-between",
+              div(class = "text-muted", "Zero-WTP filtered out"),
+              div(strong(fr$n_filtered))
+          ),
+          div(class = "d-flex justify-content-between",
+              div(class = "text-muted", "Posterior median parameters"),
+              div(strong(posterior_summary))
+          ),
+          div(class = "text-muted mt-2",
+              "Bayesian fit. The demand curve reflects the posterior predictive distribution (PPD), not a single point estimate."
+          ),
+          if (fr$n_obs < 10) {
+            div(class = "mt-2",
+                tags$span(class = "badge bg-warning text-dark",
+                          "Fragility warning: small sample size"))
+          } else NULL
+        )
+      ))
+    }
+
+    # HOW-MANY: existing OLS fit summary
     tb <- transformedDemand()
-    
+
     validate(
       need(nrow(tb) >= 3, "Need at least 3 demand points to compute fit."),
       need(all(is.finite(tb$price)), "Price must be numeric and non-missing."),
       need(all(is.finite(tb$quantity)), "Quantity must be numeric and non-missing."),
-      need(is.function(fit$predict_func), "Demand predict function is missing—check demandFitPreview()."),
+      need(is.function(fit$predict_func), "Demand predict function is missing\u2014check demandFitPreview()."),
       need(is.finite(fit$r2), "Fit statistic not available.")
     )
-    
+
     y <- tb$quantity
     yhat <- base::pmax(0, fit$predict_func(tb$price))
     rmse <- sqrt(mean((y - yhat)^2, na.rm = TRUE))
-    
+
     bslib::card(
       bslib::card_header("Fit & data strength"),
       bslib::card_body(
-        div(class="d-flex justify-content-between",
-            div(class="text-muted","Price points used"),
+        div(class = "d-flex justify-content-between",
+            div(class = "text-muted", "Price points used"),
             div(strong(nrow(tb)))
         ),
-        div(class="d-flex justify-content-between",
-            div(class="text-muted","Price range"),
+        div(class = "d-flex justify-content-between",
+            div(class = "text-muted", "Price range"),
             div(strong(paste0(min(tb$price), " to ", max(tb$price))))
         ),
-        div(class="d-flex justify-content-between",
-            div(class="text-muted","RMSE (root mean square error: average difference between observed quantity and predicted quantity)"),
+        div(class = "d-flex justify-content-between",
+            div(class = "text-muted", "RMSE (root mean square error: average difference between observed quantity and predicted quantity)"),
             div(strong(round(rmse, 3)))
         ),
-        div(class="d-flex justify-content-between",
-            div(class="text-muted","R² (goodness of fit: percent of variance in quantity explained by variance in price)"),
+        div(class = "d-flex justify-content-between",
+            div(class = "text-muted", "R\u00b2 (goodness of fit: percent of variance in quantity explained by variance in price)"),
             div(strong(round(fit$r2, 3)))
         ),
-        div(class="text-muted mt-2",
+        div(class = "text-muted mt-2",
             "These diagnostics describe how well the curve matches your observed points. They do not guarantee future demand."
         ),
-        
         if (nrow(tb) < 5) {
-          div(class="mt-2",
-              tags$span(class="badge bg-warning text-dark",
-                        "Fragility warning: few price points")
-          )
-        } else {
-          NULL
-        }
+          div(class = "mt-2",
+              tags$span(class = "badge bg-warning text-dark",
+                        "Fragility warning: few price points"))
+        } else NULL
       )
     )
   })
@@ -1161,50 +1394,62 @@ server <- function(input, output, session) {
   output$tech_model_summary <- renderPrint({
     req(demandFit())
     fit <- demandFit()
+    if (isTRUE(fit$is_dist_fit)) {
+      cat("Distribution fit (Bayesian MCMC via brms).\n")
+      cat("Distribution:", fit$model_type, "\n")
+      cat("N observations:", fit$n_obs, "\n")
+      cat("Use the ‘Fit & data strength’ card in Step 1C for parameter summaries.\n")
+      return(invisible(NULL))
+    }
     summary(fit$model)
   })
-  
+
   output$tech_coef_table <- DT::renderDT({
     req(demandFit())
     fit <- demandFit()
+
+    if (isTRUE(fit$is_dist_fit)) {
+      pd <- fit$fit_result$posterior_df
+      dist <- fit$model_type
+      param_cols <- switch(dist,
+        "Log-normal" = c("b_Intercept", "sigma"),
+        "Gamma"      = c("b_Intercept", "shape"),
+        "Weibull"    = c("b_Intercept", "shape")
+      )
+      df <- data.frame(
+        Parameter = param_cols,
+        Median    = round(apply(pd[, param_cols, drop = FALSE], 2, median), 4),
+        Q10       = round(apply(pd[, param_cols, drop = FALSE], 2, quantile, 0.10), 4),
+        Q90       = round(apply(pd[, param_cols, drop = FALSE], 2, quantile, 0.90), 4),
+        row.names = NULL
+      )
+      return(DT::datatable(df, rownames = FALSE, options = list(pageLength = 10, dom = "tip")))
+    }
+
     m <- fit$model
-    
     if (inherits(m, "lm")) {
       sm <- summary(m)$coefficients
       df <- data.frame(
-        Term = rownames(sm),
-        Estimate = sm[,1],
-        StdError = sm[,2],
-        t = sm[,3],
-        p = sm[,4],
-        row.names = NULL
+        Term = rownames(sm), Estimate = sm[,1],
+        StdError = sm[,2], t = sm[,3], p = sm[,4], row.names = NULL
       )
     } else {
-      # nls
       sm <- summary(m)$coefficients
       df <- data.frame(
-        Term = rownames(sm),
-        Estimate = sm[,1],
-        StdError = sm[,2],
-        t = sm[,3],
-        p = sm[,4],
-        row.names = NULL
+        Term = rownames(sm), Estimate = sm[,1],
+        StdError = sm[,2], t = sm[,3], p = sm[,4], row.names = NULL
       )
     }
-    
-    DT::datatable(
-      df,
-      rownames = FALSE,
-      options = list(pageLength = 10, dom = "tip")
-    )
+    DT::datatable(df, rownames = FALSE, options = list(pageLength = 10, dom = "tip"))
   })
-  
+
   output$tech_obs_fitted <- renderPlot({
     req(demandFit())
     fit <- demandFit()
+    if (isTRUE(fit$is_dist_fit)) return(NULL)
+
     tb <- fit$data
     model_type <- fit$model_type
-    
     y <- tb$quantity
     yhat <- if (model_type == "Sigmoid") {
       predict(fit$model)
@@ -1213,20 +1458,20 @@ server <- function(input, output, session) {
     } else {
       predict(fit$model)
     }
-    
-    ggplot(data.frame(obs = y, fitted = yhat), aes(x = fitted, y = obs)) +
-      geom_point() +
-      geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-      labs(title = "Observed vs fitted", x = "Fitted quantity", y = "Observed quantity") +
-      theme_minimal()
+    ggplot2::ggplot(data.frame(obs = y, fitted = yhat), ggplot2::aes(x = fitted, y = obs)) +
+      ggplot2::geom_point() +
+      ggplot2::geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+      ggplot2::labs(title = "Observed vs fitted", x = "Fitted quantity", y = "Observed quantity") +
+      ggplot2::theme_minimal()
   })
-  
+
   output$tech_resid_price <- renderPlot({
     req(demandFit())
     fit <- demandFit()
+    if (isTRUE(fit$is_dist_fit)) return(NULL)
+
     tb <- fit$data
     model_type <- fit$model_type
-    
     y <- tb$quantity
     yhat <- if (model_type == "Sigmoid") {
       predict(fit$model)
@@ -1235,37 +1480,38 @@ server <- function(input, output, session) {
     } else {
       predict(fit$model)
     }
-    
     res <- y - yhat
-    
-    ggplot(data.frame(price = tb$price, resid = res), aes(x = price, y = resid)) +
-      geom_hline(yintercept = 0, linetype = "dashed") +
-      geom_point() +
-      labs(title = "Residuals vs price", x = "Price", y = "Residual (Observed − Fitted)") +
-      theme_minimal()
+    ggplot2::ggplot(data.frame(price = tb$price, resid = res), ggplot2::aes(x = price, y = resid)) +
+      ggplot2::geom_hline(yintercept = 0, linetype = "dashed") +
+      ggplot2::geom_point() +
+      ggplot2::labs(title = "Residuals vs price", x = "Price", y = "Residual (Observed \u2212 Fitted)") +
+      ggplot2::theme_minimal()
   })
-  
+
   output$tech_influence_note <- renderUI({
     req(demandFit())
     fit <- demandFit()
+    if (isTRUE(fit$is_dist_fit)) {
+      return(div(class = "text-muted",
+                 "OLS diagnostics (Cook’s distance) are not applicable to Bayesian distribution fits."))
+    }
     if (!inherits(fit$model, "lm")) {
-      return(div(class="text-muted",
+      return(div(class = "text-muted",
                  "Influence diagnostics (Cook’s distance) are shown only for linear/log-linear regression models."))
     }
     NULL
   })
-  
+
   output$tech_cooks <- renderPlot({
     req(demandFit())
     fit <- demandFit()
+    if (isTRUE(fit$is_dist_fit)) return(NULL)
     if (!inherits(fit$model, "lm")) return(NULL)
-    
     cd <- cooks.distance(fit$model)
-    
-    ggplot(data.frame(i = seq_along(cd), cooks = cd), aes(x = i, y = cooks)) +
-      geom_col() +
-      labs(title = "Cook’s distance (influence)", x = "Observation index", y = "Cook’s D") +
-      theme_minimal()
+    ggplot2::ggplot(data.frame(i = seq_along(cd), cooks = cd), ggplot2::aes(x = i, y = cooks)) +
+      ggplot2::geom_col() +
+      ggplot2::labs(title = "Cook’s distance (influence)", x = "Observation index", y = "Cook’s D") +
+      ggplot2::theme_minimal()
   })
   
   # ---- Respondent count (for scaling) ----

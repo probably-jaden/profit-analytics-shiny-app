@@ -210,7 +210,7 @@ ui <- page_fluid(
             card(card_body(
               uiOutput("data_hygiene_box"),
               br(),
-              h6("Transformed demand table (price, quantity)"),
+              uiOutput("demand_table_header_ui"),
               DTOutput("demand_table_preview")
             ))
           )
@@ -223,16 +223,15 @@ ui <- page_fluid(
             col_widths = c(4, 8),
             card(card_body(
               uiOutput("step1c_gate_box"),
-              selectInput(
-                "model_type",
-                "Demand model form",
-                choices = c("Linear", "Exponential", "Sigmoid"),
-                selected = "Sigmoid"
-              ),
+              uiOutput("ui_step1c_model_selector"),
               actionButton("next_1c", "Next: Costs & scale", class = "btn btn-primary w-100")
             )),
             card(card_body(
               plotOutput("demand_plot", height = "320px"),
+              conditionalPanel(
+                condition = "input.demand_type === 'yesno'",
+                plotOutput("demand_survival_plot", height = "280px")
+              ),
               verbatimTextOutput("demand_equation_text"),
               uiOutput("demand_fit_box"),
               div(class = "text-muted mt-2",
